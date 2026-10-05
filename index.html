@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Vocabulary Flashcard Study Set</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .card-container { perspective: 1000px; }
+    .card-inner { transform-style: preserve-3d; transition: transform 0.5s ease; position: relative; }
+    .card-inner.flipped { transform: rotateY(180deg); }
+    .card-face { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+    .card-back { transform: rotateY(180deg); }
+    @keyframes slidein { from{opacity:0;transform:translateX(30px)} to{opacity:1;transform:translateX(0)} }
+    .slide-in { animation: slidein 0.3s ease; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div class="max-w-2xl mx-auto px-4 py-8">
+    <header class="mb-6">
+      <h1 class="text-3xl font-bold text-gray-900">Vocabulary Flashcard Study Set</h1>
+      <p class="text-gray-500 mt-1">Create decks, flip cards, and track mastery with spaced repetition</p>
+    </header>
+
+    <!-- Tabs -->
+    <div class="flex gap-1 bg-gray-200 rounded-xl p-1 mb-6" role="tablist">
+      <button id="tab-study" class="flex-1 py-2 rounded-lg text-sm font-semibold transition tab-active bg-white shadow text-gray-800" role="tab" aria-selected="true" aria-controls="panel-study">Study</button>
+      <button id="tab-manage" class="flex-1 py-2 rounded-lg text-sm font-semibold transition text-gray-500 hover:text-gray-700" role="tab" aria-selected="false" aria-controls="panel-manage">Manage Cards</button>
+      <button id="tab-progress" class="flex-1 py-2 rounded-lg text-sm font-semibold transition text-gray-500 hover:text-gray-700" role="tab" aria-selected="false" aria-controls="panel-progress">Progress</button>
+    </div>
+
+    <!-- Study panel -->
+    <div id="panel-study" role="tabpanel">
+      <!-- Filter -->
+      <div class="flex gap-2 mb-4 flex-wrap">
+        <button data-filter="all" class="filter-btn text-xs px-3 py-1.5 rounded-full font-semibold bg-blue-600 text-white transition" aria-pressed="true">All</button>
+        <button data-filter="due" class="filter-btn text-xs px-3 py-1.5 rounded-full font-semibold bg-gray-200 text-gray-600 transition" aria-pressed="false">Due for review</button>
+        <button data-filter="unknown" class="filter-btn text-xs px-3 py-1.5 rounded-full font-semibold bg-gray-200 text-gray-600 transition" aria-pressed="false">Unknown</button>
+        <button data-filter="known" class="filter-btn text-xs px-3 py-1.5 rounded-full font-semibold bg-gray-200 text-gray-600 transition" aria-pressed="false">Mastered</button>
+      </div>
+
+      <!-- Card counter -->
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-sm text-gray-500">Card <span id="cardIndex">0</span> of <span id="cardTotal">0</span></span>
+        <button id="shuffleBtn" class="text-sm text-blue-600 hover:underline" aria-label="Shuffle cards">🔀 Shuffle</button>
+      </div>
+
+      <!-- Flashcard -->
+      <div class="card-container mb-4 cursor-pointer" id="cardContainer" role="button" tabindex="0" aria-label="Flashcard — click to flip">
+        <div class="card-inner" id="cardInner" style="height:220px">
+          <div class="card-face absolute inset-0 bg-white rounded-2xl shadow-sm border border-gray-200 flex flex-col items-center justify-center p-8 text-center select-none">
+            <p class="text-xs font-semibold uppercase text-gray-400 mb-3">Term</p>
+            <p class="text-2xl font-bold text-gray-900" id="cardTerm">No cards available</p>
+            <p class="text-xs text-gray-400 mt-4">Click to reveal definition</p>
+          </div>
+          <div class="card-back card-face absolute inset-0 bg-blue-600 text-white rounded-2xl shadow-sm flex flex-col items-center justify-center p-8 text-center select-none">
+            <p class="text-xs font-semibold uppercase opacity-70 mb-3">Definition</p>
+            <p class="text-lg font-semibold" id="cardDef"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex gap-3 mb-6">
+        <button id="prevBtn" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2.5 rounded-xl transition text-sm" aria-label="Previous card">← Prev</button>
+        <button id="unknownBtn" class="flex-1 bg-red-100 hover:bg-red-200 text-red-700 font-semibold py-2.5 rounded-xl transition text-sm" aria-label="Mark as unknown">✗ Unknown</button>
+        <button id="knownBtn" class="flex-1 bg-green-100 hover:bg-green-200 text-green-700 font-semibold py-2.5 rounded-xl transition text-sm" aria-label="Mark as known">✓ Known</button>
+        <button id="nextBtn" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2.5 rounded-xl transition text-sm" aria-label="Next card">Next →</button>
+      </div>
+
+      <!-- Mastery bar for current card -->
+      <div id="masteryBar" class="bg-white rounded-2xl border border-gray-200 p-4 hidden">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-xs font-semibold text-gray-600">Card Mastery</span>
+          <span class="text-xs font-semibold text-gray-800" id="masteryPct"></span>
+        </div>
+        <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div id="masteryFill" class="h-full bg-green-500 rounded-full transition-all"></div>
+        </div>
+        <p class="text-xs text-gray-400 mt-1.5" id="nextReview"></p>
+      </div>
+    </div>
+
+    <!-- Manage panel -->
+    <div id="panel-manage" class="hidden" role="tabpanel">
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 mb-4">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3" id="addEditTitle">Add Card</h3>
+        <div class="grid grid-cols-1 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1" for="termInput">Term</label>
+            <input id="termInput" type="text" maxlength="100" placeholder="Vocabulary term…"
+              class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1" for="defInput">Definition</label>
+            <textarea id="defInput" rows="2" maxlength="300" placeholder="Definition or explanation…"
+              class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
+          </div>
+          <div class="flex gap-3">
+            <button id="saveCardBtn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm transition">Save Card</button>
+            <button id="cancelEditBtn" class="px-5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2.5 rounded-xl text-sm transition hidden">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-sm font-semibold text-gray-700"><span id="cardCount">0</span> cards in deck</p>
+        <div class="flex gap-2">
+          <button id="exportBtn" class="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-xl font-semibold transition">Export JSON</button>
+          <button id="clearDeckBtn" class="text-xs bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-xl font-semibold transition">Clear deck</button>
+        </div>
+      </div>
+
+      <div id="cardListManage" class="space-y-2 max-h-80 overflow-y-auto" role="list"></div>
+      <p id="manageEmpty" class="text-sm text-gray-400 text-center py-8 hidden">No cards yet. Add your first card above.</p>
+    </div>
+
+    <!-- Progress panel -->
+    <div id="panel-progress" class="hidden" role="tabpanel">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6" id="statsGrid"></div>
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 mb-4">
+        <h3 class="text-base font-semibold text-gray-800 mb-3">Mastery by Card</h3>
+        <div id="progressBars" class="space-y-3 max-h-80 overflow-y-auto"></div>
+        <p id="progressEmpty" class="text-sm text-gray-400 text-center py-4 hidden">No cards to show</p>
+      </div>
+    </div>
+  </div>
+
+<script>
+const LS_CARDS = 'flashcards_v3';
+let cards = JSON.parse(localStorage.getItem(LS_CARDS) || '[]');
+let studyQueue = [];
+let studyIdx = 0;
+let currentFilter = 'all';
+let editingId = null;
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+function saveCards() { localStorage.setItem(LS_CARDS, JSON.stringify(cards)); }
+
+// Spaced repetition intervals (days): 1, 3, 7, 14, 30, 90
+function nextInterval(repetitions) {
+  const intervals = [1, 3, 7, 14, 30, 90];
+  return intervals[Math.min(repetitions, intervals.length - 1)];
+}
+
+function isDue(card) {
+  if (!card.nextReview) return true;
+  return card.nextReview <= todayISO();
+}
+
+function masteryPct(card) {
+  const reps = card.repetitions || 0;
+  return Math.min(100, Math.round((reps / 6) * 100));
+}
+
+function buildQueue() {
+  let filtered = [...cards];
+  if (currentFilter === 'due') filtered = filtered.filter(isDue);
+  if (currentFilter === 'unknown') filtered = filtered.filter(c => !c.known);
+  if (currentFilter === 'known') filtered = filtered.filter(c => c.known);
+  studyQueue = filtered;
+  studyIdx = 0;
+}
+
+function renderCard() {
+  const inner = document.getElementById('cardInner');
+  inner.classList.remove('flipped');
+  const card = studyQueue[studyIdx];
+  document.getElementById('cardIndex').textContent = studyQueue.length > 0 ? studyIdx + 1 : 0;
+  document.getElementById('cardTotal').textContent = studyQueue.length;
+
+  if (!card) {
+    document.getElementById('cardTerm').textContent = currentFilter === 'all' ? 'No cards in deck' : 'No cards match filter';
+    document.getElementById('cardDef').textContent = '';
+    document.getElementById('masteryBar').classList.add('hidden');
+    return;
+  }
+
+  document.getElementById('cardTerm').textContent = card.term;
+  document.getElementById('cardDef').textContent = card.definition;
+  inner.classList.add('slide-in');
+  setTimeout(() => inner.classList.remove('slide-in'), 300);
+
+  const pct = masteryPct(card);
+  document.getElementById('masteryPct').textContent = pct + '% mastery';
+  document.getElementById('masteryFill').style.width = pct + '%';
+  document.getElementById('masteryFill').className = `h-full rounded-full transition-all ${pct >= 80 ? 'bg-green-500' : pct >= 40 ? 'bg-yellow-500' : 'bg-red-400'}`;
+  document.getElementById('nextReview').textContent = card.nextReview ? `Next review: ${card.nextReview}` : 'Not scheduled yet';
+  document.getElementById('masteryBar').classList.remove('hidden');
+}
+
+function flipCard() {
+  document.getElementById('cardInner').classList.toggle('flipped');
+}
+
+function markCard(known) {
+  const card = studyQueue[studyIdx];
+  if (!card) return;
+  const originalCard = cards.find(c => c.id === card.id);
+  if (!originalCard) return;
+  originalCard.known = known;
+  if (known) {
+    originalCard.repetitions = (originalCard.repetitions || 0) + 1;
+    const days = nextInterval(originalCard.repetitions);
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    originalCard.nextReview = d.toISOString().slice(0, 10);
+  } else {
+    originalCard.repetitions = Math.max(0, (originalCard.repetitions || 1) - 1);
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    originalCard.nextReview = d.toISOString().slice(0, 10);
+  }
+  saveCards();
+  studyIdx = Math.min(studyIdx + 1, studyQueue.length - 1);
+  buildQueue();
+  renderCard();
+}
+
+document.getElementById('cardContainer').addEventListener('click', flipCard);
+document.getElementById('cardContainer').addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); flipCard(); } });
+document.getElementById('prevBtn').addEventListener('click', () => { studyIdx = Math.max(0, studyIdx - 1); document.getElementById('cardInner').classList.remove('flipped'); renderCard(); });
+document.getElementById('nextBtn').addEventListener('click', () => { studyIdx = Math.min(studyQueue.length - 1, studyIdx + 1); document.getElementById('cardInner').classList.remove('flipped'); renderCard(); });
+document.getElementById('knownBtn').addEventListener('click', () => markCard(true));
+document.getElementById('unknownBtn').addEventListener('click', () => markCard(false));
+document.getElementById('shuffleBtn').addEventListener('click', () => {
+  studyQueue.sort(() => Math.random() - 0.5);
+  studyIdx = 0;
+  document.getElementById('cardInner').classList.remove('flipped');
+  renderCard();
+});
+
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentFilter = btn.dataset.filter;
+    document.querySelectorAll('.filter-btn').forEach(b => {
+      b.className = 'filter-btn text-xs px-3 py-1.5 rounded-full font-semibold transition ' + (b.dataset.filter === currentFilter ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600');
+      b.setAttribute('aria-pressed', b.dataset.filter === currentFilter ? 'true' : 'false');
+    });
+    document.getElementById('cardInner').classList.remove('flipped');
+    buildQueue(); renderCard();
+  });
+});
+
+// Manage
+function renderManage() {
+  const list = document.getElementById('cardListManage');
+  const empty = document.getElementById('manageEmpty');
+  document.getElementById('cardCount').textContent = cards.length;
+  if (cards.length === 0) { list.innerHTML = ''; empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+  list.innerHTML = cards.map(c => `
+    <div class="flex items-start gap-3 px-4 py-3 bg-gray-50 rounded-xl border border-gray-100" role="listitem">
+      <div class="flex-1 min-w-0">
+        <p class="font-semibold text-sm text-gray-800 truncate">${escHtml(c.term)}</p>
+        <p class="text-xs text-gray-500 mt-0.5 line-clamp-2">${escHtml(c.definition)}</p>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <div class="w-10 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+          <div class="h-full ${masteryPct(c) >= 80 ? 'bg-green-500' : masteryPct(c) >= 40 ? 'bg-yellow-500' : 'bg-red-400'} rounded-full" style="width:${masteryPct(c)}%"></div>
+        </div>
+        <button onclick="startEdit('${c.id}')" class="text-gray-300 hover:text-blue-500 transition text-sm" aria-label="Edit ${escHtml(c.term)}">✎</button>
+        <button onclick="deleteCard('${c.id}')" class="text-gray-300 hover:text-red-500 transition" aria-label="Delete ${escHtml(c.term)}">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function startEdit(id) {
+  const card = cards.find(c => c.id === id);
+  if (!card) return;
+  editingId = id;
+  document.getElementById('termInput').value = card.term;
+  document.getElementById('defInput').value = card.definition;
+  document.getElementById('addEditTitle').textContent = 'Edit Card';
+  document.getElementById('cancelEditBtn').classList.remove('hidden');
+  document.getElementById('termInput').focus();
+}
+
+function deleteCard(id) {
+  cards = cards.filter(c => c.id !== id);
+  saveCards(); buildQueue(); renderCard(); renderManage(); renderProgress();
+}
+
+document.getElementById('cancelEditBtn').addEventListener('click', () => {
+  editingId = null;
+  document.getElementById('termInput').value = '';
+  document.getElementById('defInput').value = '';
+  document.getElementById('addEditTitle').textContent = 'Add Card';
+  document.getElementById('cancelEditBtn').classList.add('hidden');
+});
+
+document.getElementById('saveCardBtn').addEventListener('click', () => {
+  const term = document.getElementById('termInput').value.trim();
+  const def = document.getElementById('defInput').value.trim();
+  if (!term || !def) { alert('Both term and definition are required.'); return; }
+  if (editingId) {
+    const c = cards.find(c => c.id === editingId);
+    if (c) { c.term = term; c.definition = def; }
+    editingId = null;
+    document.getElementById('addEditTitle').textContent = 'Add Card';
+    document.getElementById('cancelEditBtn').classList.add('hidden');
+  } else {
+    cards.push({ id: Date.now().toString(), term, definition: def, known: false, repetitions: 0, nextReview: null });
+  }
+  document.getElementById('termInput').value = '';
+  document.getElementById('defInput').value = '';
+  saveCards(); buildQueue(); renderCard(); renderManage(); renderProgress();
+});
+
+document.getElementById('clearDeckBtn').addEventListener('click', () => {
+  if (confirm('Clear the entire deck? This cannot be undone.')) {
+    cards = []; saveCards(); buildQueue(); renderCard(); renderManage(); renderProgress();
+  }
+});
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(cards, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'flashcard-deck.json'; a.click();
+});
+
+// Progress
+function renderProgress() {
+  const known = cards.filter(c => c.known).length;
+  const due = cards.filter(isDue).length;
+  const mastered = cards.filter(c => masteryPct(c) >= 80).length;
+  document.getElementById('statsGrid').innerHTML = [
+    { label: 'Total Cards', value: cards.length, color: 'bg-blue-50 border-blue-100 text-blue-700' },
+    { label: 'Mastered (80%+)', value: mastered, color: 'bg-green-50 border-green-100 text-green-700' },
+    { label: 'Due Today', value: due, color: 'bg-amber-50 border-amber-100 text-amber-700' },
+    { label: 'Overall Mastery', value: cards.length ? Math.round(cards.reduce((s, c) => s + masteryPct(c), 0) / cards.length) + '%' : '—', color: 'bg-purple-50 border-purple-100 text-purple-700' },
+  ].map(s => `<div class="rounded-2xl border p-4 text-center ${s.color}"><p class="text-xs font-medium text-gray-500 uppercase mb-1">${s.label}</p><p class="text-xl font-bold">${s.value}</p></div>`).join('');
+
+  const bars = document.getElementById('progressBars');
+  const pEmpty = document.getElementById('progressEmpty');
+  if (cards.length === 0) { bars.innerHTML = ''; pEmpty.classList.remove('hidden'); return; }
+  pEmpty.classList.add('hidden');
+  bars.innerHTML = [...cards].sort((a, b) => masteryPct(b) - masteryPct(a)).map(c => {
+    const pct = masteryPct(c);
+    return `
+    <div>
+      <div class="flex justify-between text-xs mb-1">
+        <span class="font-medium text-gray-700 truncate max-w-xs">${escHtml(c.term)}</span>
+        <span class="${pct >= 80 ? 'text-green-600' : pct >= 40 ? 'text-yellow-600' : 'text-red-500'} font-semibold">${pct}%</span>
+      </div>
+      <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div class="h-full ${pct >= 80 ? 'bg-green-500' : pct >= 40 ? 'bg-yellow-500' : 'bg-red-400'} rounded-full transition-all" style="width:${pct}%"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Tab switching
+const TABS = ['study', 'manage', 'progress'];
+function switchTab(active) {
+  TABS.forEach(t => {
+    const btn = document.getElementById(`tab-${t}`);
+    const panel = document.getElementById(`panel-${t}`);
+    if (t === active) {
+      btn.className = 'flex-1 py-2 rounded-lg text-sm font-semibold transition tab-active bg-white shadow text-gray-800';
+      btn.setAttribute('aria-selected', 'true');
+      panel.classList.remove('hidden');
+    } else {
+      btn.className = 'flex-1 py-2 rounded-lg text-sm font-semibold transition text-gray-500 hover:text-gray-700';
+      btn.setAttribute('aria-selected', 'false');
+      panel.classList.add('hidden');
+    }
+  });
+  if (active === 'manage') renderManage();
+  if (active === 'progress') renderProgress();
+}
+
+TABS.forEach(t => document.getElementById(`tab-${t}`).addEventListener('click', () => switchTab(t)));
+
+// Default cards
+if (cards.length === 0) {
+  cards = [
+    { id: '1', term: 'Algorithm', definition: 'A step-by-step procedure for solving a problem or accomplishing a task in a finite number of steps.', known: false, repetitions: 0, nextReview: null },
+    { id: '2', term: 'API (Application Programming Interface)', definition: 'A set of protocols and tools that allows different software applications to communicate with each other.', known: false, repetitions: 2, nextReview: todayISO() },
+    { id: '3', term: 'Recursion', definition: 'A programming technique where a function calls itself to solve a smaller version of the same problem.', known: true, repetitions: 4, nextReview: '2026-10-20' },
+    { id: '4', term: 'Data Structure', definition: 'A way of organizing and storing data in a computer so it can be accessed and modified efficiently.', known: false, repetitions: 1, nextReview: todayISO() },
+    { id: '5', term: 'Latency', definition: 'The delay before a transfer of data begins following an instruction for its transfer — measured in milliseconds.', known: true, repetitions: 5, nextReview: '2026-10-30' },
+  ];
+  saveCards();
+}
+
+buildQueue(); renderCard(); renderManage(); renderProgress();
+</script>
+</body>
+</html>
